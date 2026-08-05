@@ -8,9 +8,13 @@ const STORAGE_KEY = "eeprep_state_v1";
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!parsed.lessonsRead) parsed.lessonsRead = {};
+      return parsed;
+    }
   } catch (e) { /* ignore corrupt state */ }
-  return { quiz: {}, flash: {}, planner: {}, starAnswers: {} };
+  return { quiz: {}, flash: {}, planner: {}, starAnswers: {}, lessonsRead: {} };
 }
 
 function saveState() {
@@ -71,6 +75,18 @@ function priorityOrderedModules() {
   });
 }
 
+function lessonsFor(m) {
+  return m.lessons || [];
+}
+
+function lessonReadCount(m) {
+  return lessonsFor(m).filter((l) => state.lessonsRead[m.id + ":" + l.id]).length;
+}
+
+function lessonById(m, lessonId) {
+  return lessonsFor(m).find((l) => l.id === lessonId);
+}
+
 /* ---------------------------------------------------------------- router */
 
 const ROUTES = {
@@ -78,6 +94,7 @@ const ROUTES = {
   role: renderRole,
   modules: renderModulesList,
   module: renderModuleDetail,
+  lesson: renderLesson,
   flashcards: renderFlashcards,
   quiz: renderQuiz,
   planner: renderPlanner,
@@ -104,7 +121,9 @@ function navigate(hash) {
 
 function currentRoute() {
   const raw = window.location.hash.replace(/^#/, "") || "dashboard";
-  const [base, arg] = raw.split("/");
+  const parts = raw.split("/");
+  const base = parts[0];
+  const arg = parts.slice(1).join("/");
   return { base, arg };
 }
 
@@ -269,7 +288,9 @@ function renderModulesList() {
         el("strong", null, [m.title]),
         el("div", { style: "display:flex;gap:6px" }, badges),
       ]),
-      el("div", { class: "jd-ref" }, ["Maps to: " + m.jdRef]),
+      el("div", { class: "jd-ref" }, [
+        "Maps to: " + m.jdRef + (lessonsFor(m).length > 0 ? " · " + lessonReadCount(m) + "/" + lessonsFor(m).length + " lessons read" : ""),
+      ]),
     ]);
     if (score !== null) {
       const bar = el("div", { class: "progress-bar" }, [el("div", { style: "width:" + score + "%" })]);
@@ -300,7 +321,35 @@ function renderModuleDetail(id) {
 
   wrap.appendChild(el("div", { class: "card" }, [el("p", null, [m.summary])]));
 
-  const conceptsCard = el("div", { class: "card" }, [el("h3", null, ["Key concepts"])]);
+  const lessons = lessonsFor(m);
+  if (lessons.length > 0) {
+    const readCount = lessonReadCount(m);
+    const lessonsCard = el("div", { class: "card" }, [
+      el("div", { class: "row" }, [
+        el("h3", { style: "margin:0" }, ["Lessons"]),
+        el("span", { class: "badge " + (readCount === lessons.length ? "ok" : "") }, [readCount + " / " + lessons.length + " read"]),
+      ]),
+    ]);
+    lessons.forEach((l, i) => {
+      const read = !!state.lessonsRead[m.id + ":" + l.id];
+      lessonsCard.appendChild(
+        el("div", {
+          class: "module-card",
+          style: "padding:10px 0" + (i < lessons.length - 1 ? ";border-bottom:1px solid var(--border)" : ""),
+          onclick: () => navigate("lesson/" + m.id + "/" + l.id),
+        }, [
+          el("div", { class: "row" }, [
+            el("strong", null, [(i + 1) + ". " + l.title]),
+            el("span", { class: "badge " + (read ? "ok" : "") }, [read ? "Read" : "Unread"]),
+          ]),
+          el("div", { class: "jd-ref" }, [l.summary]),
+        ])
+      );
+    });
+    wrap.appendChild(lessonsCard);
+  }
+
+  const conceptsCard = el("div", { class: "card" }, [el("h3", null, [lessons.length > 0 ? "Quick recap" : "Key concepts"])]);
   conceptsCard.appendChild(el("ul", { class: "concepts" }, m.concepts.map((c) => el("li", null, [c]))));
   wrap.appendChild(conceptsCard);
 
@@ -314,6 +363,87 @@ function renderModuleDetail(id) {
     el("button", { class: "btn secondary", onclick: () => navigate("quiz/" + m.id) }, ["Take quiz (" + m.quiz.length + " questions)"]),
   ]);
   wrap.appendChild(actions);
+
+  return wrap;
+}
+
+/* -------------------------------------------------------------- lesson */
+
+function renderLesson(arg) {
+  const parts = (arg || "").split("/");
+  const moduleId = parts[0];
+  const lessonId = parts[1];
+  const m = moduleById(moduleId);
+  const wrap = el("div", null, []);
+  if (!m || !lessonId) {
+    wrap.appendChild(el("p", null, ["Lesson not found."]));
+    return wrap;
+  }
+  const lessons = lessonsFor(m);
+  const idx = lessons.findIndex((l) => l.id === lessonId);
+  const lesson = lessons[idx];
+  if (!lesson) {
+    wrap.appendChild(el("p", null, ["Lesson not found."]));
+    return wrap;
+  }
+
+  const readKey = m.id + ":" + lesson.id;
+  state.lessonsRead[readKey] = true;
+  saveState();
+
+  wrap.appendChild(el("span", { class: "back-link", onclick: () => navigate("module/" + m.id) }, ["← " + m.title]));
+  wrap.appendChild(el("p", { class: "jd-ref" }, ["Lesson " + (idx + 1) + " of " + lessons.length]));
+  wrap.appendChild(el("h1", null, [lesson.title]));
+  wrap.appendChild(el("p", { class: "subtitle" }, [lesson.summary]));
+
+  const contentCard = el("div", { class: "card lesson-content" }, []);
+  (lesson.content || []).forEach((para) => {
+    const hasCode = para.includes("\n");
+    const isExample = /^worked example/i.test(para);
+    const cls = hasCode ? "lesson-code" : isExample ? "lesson-example" : "";
+    contentCard.appendChild(el("p", { class: cls }, [para]));
+  });
+  wrap.appendChild(contentCard);
+
+  if (lesson.checkpoints && lesson.checkpoints.length > 0) {
+    wrap.appendChild(el("h2", null, ["Checkpoint"]));
+    wrap.appendChild(el("p", { class: "subtitle" }, ["Quick self-check — not scored, just for you."]));
+    lesson.checkpoints.forEach((cp, qi) => {
+      const qCard = el("div", { class: "card" }, []);
+      qCard.appendChild(el("div", { class: "quiz-question" }, [cp.q]));
+      const optsWrap = el("div", { class: "quiz-options" }, []);
+      cp.options.forEach((opt, oi) => {
+        const optNode = el("div", { class: "quiz-option" }, [opt]);
+        optNode.addEventListener("click", () => {
+          if (optNode.dataset.locked) return;
+          Array.from(optsWrap.children).forEach((c) => (c.dataset.locked = "1"));
+          Array.from(optsWrap.children).forEach((child, ci) => {
+            if (ci === cp.correct) child.classList.add("correct");
+            else if (ci === oi) child.classList.add("incorrect");
+          });
+          qCard.appendChild(el("div", { class: "quiz-explain" }, [cp.explain]));
+        });
+        optsWrap.appendChild(optNode);
+      });
+      qCard.appendChild(optsWrap);
+      wrap.appendChild(qCard);
+    });
+  }
+
+  const nav = el("div", { class: "grid cols-2", style: "margin-top:8px" }, []);
+  if (idx > 0) {
+    const prev = lessons[idx - 1];
+    nav.appendChild(el("button", { class: "btn secondary", onclick: () => navigate("lesson/" + m.id + "/" + prev.id) }, ["← " + prev.title]));
+  } else {
+    nav.appendChild(el("span", null, []));
+  }
+  if (idx < lessons.length - 1) {
+    const next = lessons[idx + 1];
+    nav.appendChild(el("button", { class: "btn", onclick: () => navigate("lesson/" + m.id + "/" + next.id) }, [next.title + " →"]));
+  } else {
+    nav.appendChild(el("button", { class: "btn", onclick: () => navigate("module/" + m.id) }, ["Finish → back to module"]));
+  }
+  wrap.appendChild(nav);
 
   return wrap;
 }

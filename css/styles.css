@@ -315,6 +315,36 @@ textarea { width: 100%; resize: vertical; font-family: inherit; }
 ul.concepts { padding-left: 20px; margin: 8px 0; }
 ul.concepts li { margin-bottom: 8px; line-height: 1.55; font-size: 0.92rem; }
 
+.lesson-content p {
+  line-height: 1.65;
+  font-size: 0.96rem;
+  margin: 0 0 16px 0;
+  max-width: 68ch;
+}
+.lesson-content p:last-child { margin-bottom: 0; }
+.lesson-content p.lesson-example {
+  background: var(--panel-2);
+  border-left: 3px solid var(--trace);
+  padding: 12px 14px;
+  border-radius: 0 8px 8px 0;
+  font-size: 0.92rem;
+  max-width: none;
+  white-space: pre-wrap;
+  font-family: var(--font-body);
+}
+.lesson-content p.lesson-code {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 0.83rem;
+  max-width: none;
+  white-space: pre-wrap;
+  font-family: var(--font-data);
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
 .flashcard {
   perspective: 1000px;
   height: 220px;
