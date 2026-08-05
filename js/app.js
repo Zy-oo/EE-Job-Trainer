@@ -127,8 +127,14 @@ function renderShell(activeBase) {
   sidebar.innerHTML = "";
   sidebar.appendChild(
     el("div", { class: "brand" }, [
-      "EE II Prep Trainer",
-      el("small", null, ["for the LivaNova Electrical Engineer II role"]),
+      el("span", {
+        class: "brand-mark",
+        html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17 H6 V7 H10 V17 H14 V7 H18 V17 H22"/></svg>',
+      }, []),
+      el("span", { class: "brand-text" }, [
+        "EE II Prep Trainer",
+        el("small", null, ["for the LivaNova Electrical Engineer II role"]),
+      ]),
     ])
   );
   NAV_ITEMS.forEach(([key, label]) => {
@@ -484,7 +490,7 @@ function buildQuizRunner(questions, scopeId) {
 
     resultBar.innerHTML = "";
     const b = badgeForScore(pct);
-    resultBar.appendChild(el("div", { style: "font-size:1.1rem;font-weight:700" }, ["Score: " + correctCount + " / " + questions.length + " (" + pct + "%)"]));
+    resultBar.appendChild(el("div", { class: "quiz-score" }, ["Score: " + correctCount + " / " + questions.length + " (" + pct + "%)"]));
     resultBar.appendChild(el("span", { class: "badge " + b.cls, style: "margin-top:6px;display:inline-block" }, [pct >= 80 ? "Strong" : pct >= 50 ? "Getting there" : "Needs more study"]));
     resultBar.appendChild(el("div", { style: "margin-top:10px;display:flex;gap:8px" }, [
       el("button", { class: "btn secondary", onclick: () => route() }, ["Retake"]),
